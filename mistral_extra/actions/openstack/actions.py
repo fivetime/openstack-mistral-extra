@@ -63,6 +63,7 @@ manilaclient = _try_import('manilaclient.client')
 manila_api_versions = _try_import('manilaclient.api_versions')
 magnumclient = _try_import('magnumclient.v1.client')
 mistralclient = _try_import('mistralclient.api.v2.client')
+murano_base = _try_import('muranoclient.common.base')
 muranoclient = _try_import('muranoclient.v1.client')
 neutronclient = _try_import('neutronclient.v2_0.client')
 openstack_connection = _try_import('openstack.connection')
@@ -785,6 +786,22 @@ class MuranoAction(base.OpenStackAction):
     @classmethod
     def _get_fake_client(cls):
         return cls._get_client_class()("http://127.0.0.1:8082/")
+
+    def run(self, context):
+        result = super(MuranoAction, self).run(context)
+
+        # A muranoclient resource that is not loaded reloads itself through
+        # its manager on any unknown attribute, and the serializer of the
+        # result asks for several: a session then fails, its manager wanting
+        # the environment too, and the whole result turns into its repr.
+        # The data of the resources is what the API answered anyway.
+        if isinstance(result, murano_base.Resource):
+            return result.to_dict()
+        if isinstance(result, list):
+            return [r.to_dict() if isinstance(r, murano_base.Resource) else r
+                    for r in result]
+
+        return result
 
 
 class TackerAction(base.OpenStackAction):

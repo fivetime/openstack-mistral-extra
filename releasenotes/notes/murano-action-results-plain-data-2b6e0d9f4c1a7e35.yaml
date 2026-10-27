@@ -1,0 +1,9 @@
+---
+fixes:
+  - |
+    The Murano actions return the data the API answered, as dictionaries and
+    lists of dictionaries, instead of muranoclient resources. A resource
+    reloads itself through its manager on any attribute it does not have,
+    which the serializer of the action result asks for; for a session that
+    failed, so the result of ``murano.sessions_configure`` reached the
+    engine as a string and the task never completed.

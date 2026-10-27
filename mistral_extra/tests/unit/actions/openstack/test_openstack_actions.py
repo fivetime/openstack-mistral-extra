@@ -16,6 +16,8 @@ from unittest import mock
 
 from mistral_extra.actions.openstack import actions
 from mistral_extra.actions.openstack.utils import keystone as keystone_utils
+from mistral_lib.actions import types as ml_types
+from mistral_lib import serialization as ml_serialization
 from oslo_config import cfg
 from oslo_utils import importutils
 from oslotest import base
@@ -264,7 +266,7 @@ class OpenStackActionTest(base.BaseTestCase):
 
         result = self._murano_run('categories.get', id='C')
 
-        self.assertEqual('Web', result.name)
+        self.assertEqual({'id': 'C', 'name': 'Web'}, result)
         self.assertEqual('TOKEN', get.last_request.headers['X-Auth-Token'])
 
     def test_murano_action_create(self):
@@ -276,8 +278,37 @@ class OpenStackActionTest(base.BaseTestCase):
         result = self._murano_run('environments.create',
                                   data={'name': 'web'})
 
-        self.assertEqual('E', result.id)
+        self.assertEqual({'id': 'E', 'name': 'web'}, result)
         self.assertEqual({'name': 'web'}, post.last_request.json())
+
+    def test_murano_action_session_result(self):
+        # Mistral sends the result to the engine through its serializer;
+        # a session resource used to come out as its repr.
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        session = {'id': 'S', 'environment_id': 'E', 'state': 'opened',
+                   'version': 0, 'user_id': 'U',
+                   'created': '2026-10-27T07:34:21',
+                   'updated': '2026-10-27T07:34:21'}
+        self.requests.post(
+            'http://murano.example:8082/v1/environments/E/configure',
+            json=session)
+
+        result = self._murano_run('sessions.configure', environment_id='E')
+
+        serializer = ml_serialization.get_polymorphic_serializer()
+        sent = serializer.deserialize(
+            serializer.serialize(ml_types.Result(data=result)))
+        self.assertEqual(session, sent.data)
+
+    def test_murano_action_list(self):
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        self.requests.get(
+            'http://murano.example:8082/v1/environments',
+            json={'environments': [{'id': 'E1'}, {'id': 'E2'}]})
+
+        result = self._murano_run('environments.list')
+
+        self.assertEqual([{'id': 'E1'}, {'id': 'E2'}], result)
 
     def test_murano_action_toggle_public(self):
         self.requests = self.useFixture(rm_fixture.Fixture())
