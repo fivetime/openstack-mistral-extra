@@ -1,0 +1,10 @@
+---
+features:
+  - |
+    The Murano actions are back, with the names and arguments they had
+    before they were removed, for example ``murano.environments_create`` or
+    ``murano.sessions_deploy``. They call python-muranoclient 3.0.2 or
+    later through a keystoneauth session, and find the application catalog
+    by its service type, ``application-catalog``, instead of by the service
+    name ``murano``. ``murano`` is in
+    ``[openstack_actions] modules-support-region``.

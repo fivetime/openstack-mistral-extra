@@ -243,6 +243,56 @@ class OpenStackActionTest(base.BaseTestCase):
         self.assertTrue(mocked().domain.get.called)
         mocked().domain.get.assert_called_once_with(domain="example.com")
 
+    def _murano_run(self, method_name, **params):
+        endpoint = FakeEndpoint(url='http://murano.example:8082',
+                                region='RegionOne')
+        ctx = mock.Mock(auth_token='TOKEN', project_id='PROJECT',
+                        insecure=False, auth_cacert=None,
+                        auth_uri='http://keystone.example/v3')
+
+        action_class = actions.MuranoAction
+        action_class.client_method_name = method_name
+        with mock.patch.object(keystone_utils, 'get_endpoint_for_project',
+                               return_value=endpoint):
+            return action_class(**params).run(ctx)
+
+    def test_murano_action(self):
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        get = self.requests.get(
+            'http://murano.example:8082/v1/catalog/categories/C',
+            json={'id': 'C', 'name': 'Web'})
+
+        result = self._murano_run('categories.get', id='C')
+
+        self.assertEqual('Web', result.name)
+        self.assertEqual('TOKEN', get.last_request.headers['X-Auth-Token'])
+
+    def test_murano_action_create(self):
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        post = self.requests.post(
+            'http://murano.example:8082/v1/environments',
+            json={'id': 'E', 'name': 'web'})
+
+        result = self._murano_run('environments.create',
+                                  data={'name': 'web'})
+
+        self.assertEqual('E', result.id)
+        self.assertEqual({'name': 'web'}, post.last_request.json())
+
+    def test_murano_action_toggle_public(self):
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        url = 'http://murano.example:8082/v1/catalog/packages/P'
+        self.requests.get(url, json={'id': 'P', 'is_public': False})
+        patch = self.requests.patch(url, json={'id': 'P', 'is_public': True})
+
+        self._murano_run('packages.toggle_public', app_id='P')
+
+        self.assertEqual(
+            [{'op': 'replace', 'path': '/is_public', 'value': True}],
+            patch.last_request.json())
+        self.assertEqual('application/murano-packages-json-patch',
+                         patch.last_request.headers['Content-Type'])
+
     @mock.patch.object(actions.TackerAction, '_get_client')
     def test_tacker_action(self, mocked):
         mock_ctx = mock.Mock()

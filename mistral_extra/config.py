@@ -40,7 +40,7 @@ openstack_actions_opts = [
         'modules-support-region',
         default=['nova', 'glance', 'heat', 'neutron', 'cinder',
                  'trove', 'ironic', 'designate', 'tacker', 'aodh', 'gnocchi',
-                 'senlin'],
+                 'senlin', 'murano'],
         help='List of module names that support region in actions.'
     ),
     cfg.StrOpt(

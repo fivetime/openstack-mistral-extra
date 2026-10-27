@@ -52,6 +52,7 @@ MODULE_MAPPING = {
     'designate': ['designate.quotas_list', actions.DesignateAction],
     'manila': ['manila.shares_list', actions.ManilaAction],
     'magnum': ['magnum.mservices_list', actions.MagnumAction],
+    'murano': ['murano.deployments_list', actions.MuranoAction],
     'aodh': ['aodh.alarm_list', actions.AodhAction],
     'gnocchi': ['gnocchi.metric_list', actions.GnocchiAction],
     'senlin': ['senlin.scale_out_cluster', actions.SenlinAction],

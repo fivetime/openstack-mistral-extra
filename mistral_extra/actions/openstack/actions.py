@@ -63,6 +63,7 @@ manilaclient = _try_import('manilaclient.client')
 manila_api_versions = _try_import('manilaclient.api_versions')
 magnumclient = _try_import('magnumclient.v1.client')
 mistralclient = _try_import('mistralclient.api.v2.client')
+muranoclient = _try_import('muranoclient.v1.client')
 neutronclient = _try_import('neutronclient.v2_0.client')
 openstack_connection = _try_import('openstack.connection')
 clustering_proxy = _try_import('openstack.clustering.v1._proxy')
@@ -757,6 +758,33 @@ class MagnumAction(base.OpenStackAction):
     @classmethod
     def _get_fake_client(cls):
         return cls._get_client_class()(auth_url='X', magnum_url='X')
+
+
+class MuranoAction(base.OpenStackAction):
+    _service_types = ['application-catalog']
+
+    @classmethod
+    def _get_client_class(cls):
+        return muranoclient.Client
+
+    def _create_client(self, context):
+
+        LOG.debug("Murano action security context: %s", context)
+
+        session_and_auth = self.get_session_and_auth(context)
+        session = session_and_auth['session']
+
+        # The auth of the session gives the keystone endpoint for any
+        # service, the other auth the application catalog endpoint of the
+        # project.
+        return self._get_client_class()(
+            session_and_auth['auth'].get_endpoint(session),
+            session=session
+        )
+
+    @classmethod
+    def _get_fake_client(cls):
+        return cls._get_client_class()("http://127.0.0.1:8082/")
 
 
 class TackerAction(base.OpenStackAction):
