@@ -1,0 +1,18 @@
+---
+features:
+  - |
+    The Senlin actions are back. They call the clustering proxy of
+    openstacksdk instead of python-senlinclient, and each action is named
+    after the method of the proxy it calls, for example
+    ``senlin.scale_out_cluster`` or ``senlin.attach_policy_to_cluster``, with
+    the arguments of that method. The deprecated ``get_cluster_metadata`` and
+    the ``wait_for_*`` helpers are not actions. ``senlin`` is in
+    ``[openstack_actions] modules-support-region``.
+upgrade:
+  - |
+    The Senlin actions removed earlier used the names of python-senlinclient,
+    which they do not keep: ``senlin.cluster_scale_out`` is now
+    ``senlin.scale_out_cluster``, ``senlin.cluster_attach_policy`` is
+    ``senlin.attach_policy_to_cluster`` and so on, and
+    ``senlin.get_cluster_policy`` takes ``cluster_policy`` instead of
+    ``policy``.

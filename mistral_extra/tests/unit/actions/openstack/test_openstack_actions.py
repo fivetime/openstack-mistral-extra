@@ -15,9 +15,11 @@
 from unittest import mock
 
 from mistral_extra.actions.openstack import actions
+from mistral_extra.actions.openstack.utils import keystone as keystone_utils
 from oslo_config import cfg
 from oslo_utils import importutils
 from oslotest import base
+from requests_mock.contrib import fixture as rm_fixture
 
 CONF = cfg.CONF
 CONF.register_opt(cfg.BoolOpt('auth_enable'), group='pecan')
@@ -296,6 +298,49 @@ class OpenStackActionTest(base.BaseTestCase):
         mocked().containers.get.assert_called_once_with(
             container_id="1234-abcd"
         )
+
+    def _senlin_run(self, method_name, **params):
+        senlin = 'http://senlin.example:8778'
+        endpoint = FakeEndpoint(url=senlin, region='RegionOne')
+        ctx = mock.Mock(auth_token='TOKEN', project_id='PROJECT',
+                        insecure=False, auth_cacert=None,
+                        auth_uri='http://keystone.example/v3')
+        self.requests.get(senlin + '/', json={'versions': [{
+            'id': '1.0', 'status': 'CURRENT', 'min_version': '1.0',
+            'max_version': '1.14',
+            'links': [{'href': senlin + '/v1', 'rel': 'self'}]}]})
+
+        action_class = actions.SenlinAction
+        action_class.client_method_name = method_name
+        with mock.patch.object(keystone_utils, 'get_endpoint_for_project',
+                               return_value=endpoint):
+            return action_class(**params).run(ctx)
+
+    def test_senlin_action(self):
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        self.requests.get('http://senlin.example:8778/v1/clusters/C',
+                          json={'cluster': {'id': 'C', 'name': 'c'}})
+        post = self.requests.post(
+            'http://senlin.example:8778/v1/clusters/C/actions',
+            json={'action': 'A'})
+
+        result = self._senlin_run('scale_out_cluster', cluster='C', count=2)
+
+        self.assertEqual({'action': 'A'}, result)
+        self.assertEqual({'scale_out': {'count': 2}}, post.last_request.json())
+        self.assertEqual('TOKEN', post.last_request.headers['X-Auth-Token'])
+
+    def test_senlin_action_list(self):
+        self.requests = self.useFixture(rm_fixture.Fixture())
+        self.requests.get('http://senlin.example:8778/v1/clusters',
+                          json={'clusters': [{'id': 'C1'}, {'id': 'C2'}]})
+
+        result = self._senlin_run('clusters', status='ACTIVE')
+
+        self.assertEqual(['C1', 'C2'], [c.id for c in result])
+        self.assertEqual(
+            'http://senlin.example:8778/v1/clusters?status=ACTIVE',
+            self.requests.last_request.url)
 
     @mock.patch.object(actions.ManilaAction, '_get_client')
     def test_manila_action(self, mocked):

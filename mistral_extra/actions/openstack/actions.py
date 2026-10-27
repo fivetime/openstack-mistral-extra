@@ -64,6 +64,8 @@ manila_api_versions = _try_import('manilaclient.api_versions')
 magnumclient = _try_import('magnumclient.v1.client')
 mistralclient = _try_import('mistralclient.api.v2.client')
 neutronclient = _try_import('neutronclient.v2_0.client')
+openstack_connection = _try_import('openstack.connection')
+clustering_proxy = _try_import('openstack.clustering.v1._proxy')
 nova = _try_import('novaclient')
 novaclient = _try_import('novaclient.client')
 nova_api_versions = _try_import('novaclient.api_versions')
@@ -783,6 +785,37 @@ class TackerAction(base.OpenStackAction):
     @classmethod
     def _get_fake_client(cls):
         return cls._get_client_class()()
+
+
+class SenlinAction(base.OpenStackAction):
+    _service_types = ['clustering']
+
+    @classmethod
+    def _get_client_class(cls):
+        return clustering_proxy.Proxy
+
+    def _create_client(self, context):
+
+        LOG.debug("Senlin action security context: %s", context)
+
+        session_and_auth = self.get_session_and_auth(context)
+        session = session_and_auth['session']
+
+        # The auth of the session gives the keystone endpoint for any
+        # service, the other auth the clustering endpoint of the project.
+        conn = openstack_connection.Connection(
+            session=session,
+            clustering_endpoint_override=session_and_auth[
+                'auth'].get_endpoint(session)
+        )
+
+        return conn.clustering
+
+    @classmethod
+    def _get_fake_client(cls):
+        # A proxy needs a session; the methods are all that is looked at.
+        class_ = cls._get_client_class()
+        return class_.__new__(class_)
 
 
 class AodhAction(base.OpenStackAction):

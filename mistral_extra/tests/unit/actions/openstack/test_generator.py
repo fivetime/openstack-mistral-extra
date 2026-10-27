@@ -54,10 +54,11 @@ MODULE_MAPPING = {
     'magnum': ['magnum.mservices_list', actions.MagnumAction],
     'aodh': ['aodh.alarm_list', actions.AodhAction],
     'gnocchi': ['gnocchi.metric_list', actions.GnocchiAction],
+    'senlin': ['senlin.scale_out_cluster', actions.SenlinAction],
     'zun': ['zun.containers_list', actions.ZunAction]
 }
 
-EXTRA_MODULES = ['neutron', 'swift', 'zaqar', 'tacker']
+EXTRA_MODULES = ['neutron', 'swift', 'zaqar', 'tacker', 'senlin']
 
 
 CONF = cfg.CONF
