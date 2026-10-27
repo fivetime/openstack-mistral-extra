@@ -12,6 +12,7 @@
 #    limitations under the License.
 import contextlib
 import os
+import threading
 
 import fixtures
 from oslo_config import cfg
@@ -25,6 +26,8 @@ from mistral_extra import config
 from mistral_extra.tests.unit import base
 
 import barbicanclient.v1.client as barbicanclient_test
+from ironic_inspector_client.common import http as inspector_http
+from keystoneclient import httpclient
 from unittest import mock
 
 ABSOLUTE_TEST_MAPPING_PATH = os.path.realpath(
@@ -71,15 +74,6 @@ class GeneratorTest(base.BaseTest):
     def setUp(self):
         super(GeneratorTest, self).setUp()
 
-        # The baremetal inspector client expects the service to be running
-        # when it is initialised and attempts to connect. This mocks out this
-        # service only and returns a simple function that can be used by the
-        # inspection utils.
-        self.useFixture(fixtures.MockPatchObject(
-            actions.BaremetalIntrospectionAction, "get_fake_client_method",
-            return_value=lambda x: None))
-
-        # Do the same for the Zun client.
         # There is no rpm packaging for Zun client
         # so importing the client will fail when building
         # the rpm and running the unittest so lets mock it
@@ -116,6 +110,45 @@ class GeneratorTest(base.BaseTest):
             modules = CONF.openstack_actions.modules_support_region
             if generator_cls.action_namespace in modules:
                 self.assertIn('action_region', action['arg_list'])
+
+    def test_generators_in_threads(self):
+        # The API loads the actions in each request thread that needs them
+        # first, so the generators run at the same time.
+        authenticate = httpclient.HTTPClient.authenticate
+        server_api_versions = inspector_http.BaseClient.server_api_versions
+
+        for generator_cls in generator_factory.all_generators():
+            if generator_cls.action_namespace not in (
+                    'keystone', 'baremetal_introspection'):
+                continue
+
+            expected = generator_cls.create_actions()
+            barrier = threading.Barrier(8)
+            results = []
+
+            def create():
+                barrier.wait()
+                results.append(generator_cls.create_actions())
+
+            threads = [threading.Thread(target=create) for _ in range(8)]
+
+            for t in threads:
+                t.start()
+
+            for t in threads:
+                t.join()
+
+            self.assertEqual(8, len(results))
+
+            for res in results:
+                self.assertEqual(
+                    [(a['name'], a['arg_list']) for a in expected],
+                    [(a['name'], a['arg_list']) for a in res]
+                )
+
+        self.assertIs(authenticate, httpclient.HTTPClient.authenticate)
+        self.assertIs(server_api_versions,
+                      inspector_http.BaseClient.server_api_versions)
 
     def test_missing_module_from_mapping(self):
         with _patch_openstack_action_mapping_path(RELATIVE_TEST_MAPPING_PATH):

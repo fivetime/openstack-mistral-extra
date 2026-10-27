@@ -21,7 +21,6 @@ from oslo_utils import importutils
 from keystoneauth1.identity import v3 as ks_identity_v3
 from keystoneauth1 import session as ks_session
 from keystoneauth1.token_endpoint import Token
-from keystoneclient import httpclient
 
 from mistral_extra.actions.openstack import base
 from mistral_extra.actions.openstack.utils import keystone as keystone_utils
@@ -165,16 +164,8 @@ class KeystoneAction(base.OpenStackAction):
 
     @classmethod
     def _get_fake_client(cls):
-        # Here we need to replace httpclient authenticate method temporarily
-        authenticate = httpclient.HTTPClient.authenticate
-
-        httpclient.HTTPClient.authenticate = lambda x: True
-        fake_client = cls._get_client_class()()
-
-        # Once we get fake client, return back authenticate method
-        httpclient.HTTPClient.authenticate = authenticate
-
-        return fake_client
+        # A client given a session authenticates on its first request only.
+        return cls._get_client_class()(session=ks_session.Session())
 
 
 class HeatAction(base.OpenStackAction):
@@ -377,20 +368,13 @@ class BaremetalIntrospectionAction(base.OpenStackAction):
 
     @classmethod
     def _get_fake_client(cls):
-        # Can't get real service api_version from a fake client
-        # Replace server_api_versions method here
-        server_api_versions = \
-            ironic_inspector_client.common.http.BaseClient.server_api_versions
+        # Can't get real service api_version from a fake client. Answer it
+        # in a subclass: the generators run in several threads at a time.
+        class FakeClient(cls._get_client_class()):
+            def server_api_versions(self):
+                return (1, 0), (1, 0)
 
-        ironic_inspector_client.common.http.BaseClient.server_api_versions = \
-            lambda x: ((1, 0), (1, 0))
-
-        client = cls._get_client_class()(inspector_url='http://127.0.0.1')
-
-        ironic_inspector_client.common.http.BaseClient.server_api_versions = \
-            server_api_versions
-
-        return client
+        return FakeClient(inspector_url='http://127.0.0.1')
 
     def _create_client(self, context):
         LOG.debug(
